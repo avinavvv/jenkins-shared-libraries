@@ -1,11 +1,10 @@
+
 def call() {
     return sh(
         script: '''
             set -eu
-            find src -mindepth 2 -maxdepth 2 \
-                -type f -name Dockerfile \
-                -print |
-            sed 's#^src/##; s#/Dockerfile$##' |
+            find src -type f -iname 'Dockerfile' -print |
+            sed -E 's#^src/([^/]+)(/.*)?/Dockerfile$#\\1#' |
             sort -u
         ''',
         returnStdout: true

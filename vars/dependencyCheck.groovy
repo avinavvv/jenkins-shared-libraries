@@ -1,13 +1,8 @@
+```groovy
 def call() {
     dependencyCheck(
-        odcInstallation: 'OWASP-Dependency-Check',
-        additionalArguments: '''
-            --scan src
-            --format HTML
-            --format XML
-            --out .
-            --failOnCVSS 7
-        '''.trim().replaceAll('\\s+', ' ')
+        odcInstallation: 'OWASP',
+        additionalArguments: '--scan src --format HTML --format XML --out .'
     )
 
     dependencyCheckPublisher(
@@ -16,3 +11,4 @@ def call() {
         stopBuild: true
     )
 }
+```

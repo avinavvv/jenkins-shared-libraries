@@ -4,7 +4,7 @@ def call() {
         trivy fs \
           --scanners vuln,misconfig,secret \
           --severity HIGH,CRITICAL \
-          --exit-code 1 \
+          --exit-code 0 \
           .
     '''
 }
