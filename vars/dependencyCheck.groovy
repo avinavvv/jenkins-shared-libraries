@@ -1,5 +1,5 @@
 def call(String installation) {
-    dependencyCheck(
+    dependencyCheckAnalyze(
         odcInstallation: installation,
         additionalArguments: '--scan . --format HTML,XML'
     )
@@ -8,3 +8,4 @@ def call(String installation) {
         pattern: '**/dependency-check-report.xml'
     )
 }
+
