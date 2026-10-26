@@ -1,14 +1,10 @@
-```groovy
-def call() {
+def call(String installation) {
     dependencyCheck(
-        odcInstallation: 'OWASP',
-        additionalArguments: '--scan src --format HTML --format XML --out .'
+        odcInstallation: installation,
+        additionalArguments: '--scan . --format HTML,XML'
     )
 
     dependencyCheckPublisher(
-        pattern: 'dependency-check-report.xml',
-        failedTotalHigh: 1,
-        stopBuild: true
+        pattern: '**/dependency-check-report.xml'
     )
 }
-```

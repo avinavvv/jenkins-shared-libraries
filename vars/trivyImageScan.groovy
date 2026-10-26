@@ -1,23 +1,25 @@
-def call() {
+def call(
+    String credentialsId,
+    String severities,
+    String exitCode
+) {
+    def services = env.SERVICES.readLines().findAll { it.trim() }
+
     withCredentials([
         usernamePassword(
-            credentialsId: env.DOCKERHUB_CREDENTIALS,
+            credentialsId: credentialsId,
             usernameVariable: 'DH_USER',
             passwordVariable: 'DH_TOKEN'
         )
     ]) {
-        def services = env.SERVICES.readLines().findAll { it.trim() }
-
         services.each { service ->
             def image = "${env.DH_USER}/${service}:${env.IMAGE_TAG}"
-
-            echo "Scanning image: ${image}"
 
             sh """
                 set -eu
                 trivy image \
-                  --severity HIGH,CRITICAL \
-                  --exit-code 1 \
+                  --severity '${severities}' \
+                  --exit-code '${exitCode}' \
                   --ignore-unfixed \
                   '${image}'
             """

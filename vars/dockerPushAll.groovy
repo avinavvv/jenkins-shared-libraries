@@ -1,7 +1,9 @@
-def call() {
+def call(String credentialsId) {
+    def services = env.SERVICES.readLines().findAll { it.trim() }
+
     withCredentials([
         usernamePassword(
-            credentialsId: env.DOCKERHUB_CREDENTIALS,
+            credentialsId: credentialsId,
             usernameVariable: 'DH_USER',
             passwordVariable: 'DH_TOKEN'
         )
@@ -14,13 +16,10 @@ def call() {
                   --password-stdin
             '''
 
-            def services = env.SERVICES.readLines().findAll { it.trim() }
-
             services.each { service ->
                 def image = "${env.DH_USER}/${service}:${env.IMAGE_TAG}"
 
                 echo "Pushing image: ${image}"
-
                 sh "docker push '${image}'"
             }
         } finally {

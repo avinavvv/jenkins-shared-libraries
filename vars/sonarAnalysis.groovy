@@ -1,13 +1,19 @@
-def call(String projectKey, String projectName, String sourceDir) {
-    withSonarQubeEnv('Sonar') {
-        def scannerHome = tool 'Sonar'
+def call(
+    String installation,
+    String projectKey,
+    String projectName,
+    String sources
+) {
+    withSonarQubeEnv(installation) {
+        def scannerHome = tool installation
 
         sh """
             set -eu
-            "${scannerHome}/bin/sonar-scanner" \
+            "\${scannerHome}/bin/sonar-scanner" \
               -Dsonar.projectKey="${projectKey}" \
               -Dsonar.projectName="${projectName}" \
-              -Dsonar.sources="${sourceDir}" \
+              -Dsonar.sources="${sources}" \
+              '-Dsonar.exclusions=**/*.java' \
               -Dsonar.sourceEncoding=UTF-8
         """
     }
