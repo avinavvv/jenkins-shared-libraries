@@ -7,10 +7,12 @@ def call(String imageTagLength) {
     ).trim()
 
     // Docker image tag
-    env.IMAGE_TAG = "sha-${sh(
+    def shortCommit = sh(
         script: "git rev-parse --short=${imageTagLength} HEAD",
         returnStdout: true
-    ).trim()}"
+    ).trim()
+
+    env.IMAGE_TAG = "sha-${shortCommit}"
 
     // Last successful Jenkins build ka commit
     def previousSuccessfulBuild = currentBuild.previousSuccessfulBuild
@@ -22,6 +24,7 @@ def call(String imageTagLength) {
     def allServices = sh(
         script: '''
             set -eu
+
             find src -type f -name Dockerfile -print |
             sed -E 's#^src/([^/]+)(/.*)?/Dockerfile$#\\1#' |
             sort -u
@@ -36,10 +39,14 @@ def call(String imageTagLength) {
     def selectedServices
 
     if (!previousCommit) {
+
         // First run: all services
         echo 'First successful build not found. Selecting all services.'
+
         selectedServices = allServices.readLines()
+
     } else {
+
         // Last successful build se current commit tak changes
         def changedFiles = sh(
             script: "git diff --name-only ${previousCommit} ${currentCommit}",
@@ -59,6 +66,7 @@ def call(String imageTagLength) {
         echo "Changed services: ${selectedServices}"
     }
 
+    // Selected services environment variable
     env.SERVICES = selectedServices.join('\n')
 
     echo "Image tag: ${env.IMAGE_TAG}"
