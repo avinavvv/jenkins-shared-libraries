@@ -1,10 +1,12 @@
 def call(String imageTagLength) {
 
+    // Current commit
     def currentCommit = sh(
         script: 'git rev-parse HEAD',
         returnStdout: true
     ).trim()
 
+    // Docker image tag
     env.IMAGE_TAG = "sha-${sh(
         script: "git rev-parse --short=${imageTagLength} HEAD",
         returnStdout: true
@@ -19,6 +21,7 @@ def call(String imageTagLength) {
     // Available microservices discover karo
     def allServices = sh(
         script: '''
+            set -eu
             find src -type f -name Dockerfile -print |
             sed -E 's#^src/([^/]+)(/.*)?/Dockerfile$#\\1#' |
             sort -u
