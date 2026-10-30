@@ -1,5 +1,11 @@
 def call(String credentialsId) {
-    def services = env.SERVICES.readLines().findAll { it.trim() }
+
+    def services = env.SERVICES?.readLines()?.findAll { it.trim() } ?: []
+
+    if (services.isEmpty()) {
+        echo 'No changed microservices. Skipping Docker push.'
+        return
+    }
 
     withCredentials([
         usernamePassword(
