@@ -1,5 +1,11 @@
 def call(String credentialsId) {
-    def services = env.SERVICES.readLines().findAll { it.trim() }
+
+    def services = env.SERVICES?.readLines()?.findAll { it.trim() } ?: []
+
+    if (services.isEmpty()) {
+        echo 'No changed microservices. Skipping Docker build.'
+        return
+    }
 
     withCredentials([
         usernamePassword(
@@ -9,6 +15,7 @@ def call(String credentialsId) {
         )
     ]) {
         services.each { service ->
+
             def dockerfile = sh(
                 script: "find 'src/${service}' -type f -name Dockerfile -print -quit",
                 returnStdout: true
