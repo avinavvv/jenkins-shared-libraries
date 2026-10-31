@@ -14,6 +14,7 @@ def call(String credentialsId) {
             passwordVariable: 'DH_TOKEN'
         )
     ]) {
+
         services.each { service ->
 
             def dockerfile = sh(
@@ -37,10 +38,10 @@ def call(String credentialsId) {
             sh """
                 set -eu
                 docker buildx build \
-                  --load \
-                  -f '${dockerfile}' \
-                  -t '${image}' \
-                  '${context}'
+                    --load \
+                    -f '${dockerfile}' \
+                    -t '${image}' \
+                    '${context}'
             """
         }
     }
