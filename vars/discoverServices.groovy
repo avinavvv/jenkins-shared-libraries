@@ -1,19 +1,22 @@
 
 def call(String imageTagLength) {
 
-    // 1. Current commit
+    // 1. Get current commit
     def currentCommit = sh(
         script: 'git rev-parse HEAD',
         returnStdout: true
     ).trim()
 
-    // 2. Docker image tag
+    // 2. Generate Docker image tag
     def shortCommit = sh(
         script: "git rev-parse --short=${imageTagLength} HEAD",
         returnStdout: true
     ).trim()
 
     env.IMAGE_TAG = "sha-${shortCommit}"
+
+    // Default: CI will be skipped
+    env.RUN_CI = 'false'
 
     // 3. Discover all available microservices
     def allServicesOutput = sh(
@@ -40,84 +43,76 @@ def call(String imageTagLength) {
         ?.getBuildVariables()
         ?.get('GIT_COMMIT')
 
-    // 5. First build or missing baseline: build all services
+    // 5. First build: select all services
     if (!previousCommit) {
 
-        echo 'No previous successful commit found. Selecting all services.'
+        echo 'First build detected. Running complete CI pipeline.'
+
+        env.RUN_CI = 'true'
         selectedServices = allServices
 
     } else {
 
-        // 6. Validate previous commit exists in checkout
+        // 6. Validate previous commit
         def commitExists = sh(
             script: "git cat-file -e '${previousCommit}^{commit}' 2>/dev/null",
             returnStatus: true
         ) == 0
 
         if (!commitExists) {
+            error("Previous successful commit is unavailable: ${previousCommit}")
+        }
 
-            echo 'Previous commit is unavailable. Selecting all services.'
-            selectedServices = allServices
+        // 7. Detect changed files
+        def changedFilesOutput = sh(
+            script: "git diff --name-only '${previousCommit}' '${currentCommit}'",
+            returnStdout: true
+        ).trim()
 
-        } else {
+        def changedFiles = changedFilesOutput
+            ? changedFilesOutput.readLines()
+            : []
 
-            // 7. Find changed files
-            def changedFilesOutput = sh(
-                script: "git diff --name-only '${previousCommit}' '${currentCommit}'",
-                returnStdout: true
-            ).trim()
+        echo "Changed files: ${changedFiles}"
 
-            def changedFiles = changedFilesOutput
-                ? changedFilesOutput.readLines()
-                : []
+        // 8. Check whether anything changed inside src/
+        def sourceChanged = changedFiles.any {
+            it.startsWith('src/')
+        }
 
-            echo "Changed files: ${changedFiles}"
+        if (sourceChanged) {
 
-            // 8. Select changed microservices
+            env.RUN_CI = 'true'
+
+            echo 'Changes detected inside src/. Running CI pipeline.'
+
+            // 9. Identify changed microservices
             def changedServices = changedFiles
                 .findAll { it.startsWith('src/') }
                 .collect { it.split('/')[1] }
                 .unique()
 
-            // 9. Shared/root build configuration changes
-            def sharedChanges = changedFiles.any { file ->
-                !file.startsWith('src/') &&
-                (
-                    file == 'Jenkinsfile' ||
-                    file == '.dockerignore' ||
-                    file == 'Dockerfile' ||
-                    file == 'docker-compose.yml'
-                )
+            // 10. Select only changed microservices
+            selectedServices = allServices.findAll {
+                changedServices.contains(it)
             }
 
-            // Changes inside src but outside discovered service folders
-            def unknownSrcChanges = changedFiles.any { file ->
-                if (!file.startsWith('src/')) {
-                    return false
-                }
-
-                def parts = file.split('/')
-                return parts.length < 2 ||
-                    !allServices.contains(parts[1])
+            if (selectedServices.isEmpty()) {
+                echo 'Source files changed, but no individual microservice Dockerfile directory was identified.'
             }
 
-            if (sharedChanges || unknownSrcChanges) {
+        } else {
 
-                echo 'Shared or unknown source changes detected. Selecting all services.'
-                selectedServices = allServices
+            env.RUN_CI = 'false'
 
-            } else {
-
-                selectedServices = allServices.findAll {
-                    changedServices.contains(it)
-                }
-            }
+            echo 'No changes detected inside src/. Skipping CI pipeline.'
         }
     }
 
-    // 10. Export selected services
+    // 11. Export selected services
     env.SERVICES = selectedServices.join('\n')
 
+    echo "RUN_CI: ${env.RUN_CI}"
     echo "Image tag: ${env.IMAGE_TAG}"
-    echo "Selected services: ${env.SERVICES ?: 'No services changed'}"
+    echo "Selected services: ${env.SERVICES ?: 'No services selected'}"
 }
