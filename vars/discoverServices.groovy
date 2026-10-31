@@ -14,11 +14,9 @@ def call(String imageTagLength) {
     ).trim()
 
     env.IMAGE_TAG = "sha-${shortCommit}"
-
-    // Default: CI will be skipped
     env.RUN_CI = 'false'
 
-    // 3. Discover all available microservices
+    // 3. Discover all microservices
     def allServicesOutput = sh(
         script: '''
             set -eu
@@ -36,24 +34,36 @@ def call(String imageTagLength) {
     def allServices = allServicesOutput.readLines()
     def selectedServices = []
 
-    // 4. Find previous successful build commit
-    def previousSuccessfulBuild = currentBuild.previousSuccessfulBuild
+    // 4. Get previous successful build
+    def previousBuild = currentBuild.previousSuccessfulBuild
 
-    def previousCommit = previousSuccessfulBuild
-        ?.getBuildVariables()
-        ?.get('GIT_COMMIT')
+    // 5. Read baseline commit from previous build description
+    def previousDescription = previousBuild?.description ?: ''
 
-    // 5. First build: select all services
+    def matcher = previousDescription =~ /CI_BASELINE_COMMIT=([0-9a-f]{40})/
+    def previousCommit = matcher.find() ? matcher.group(1) : null
+
+    // Fallback for older builds
+    if (!previousCommit) {
+        previousCommit = previousBuild
+            ?.getBuildVariables()
+            ?.get('GIT_COMMIT')
+    }
+
+    echo "Previous successful build: ${previousBuild?.number ?: 'None'}"
+    echo "Previous successful commit: ${previousCommit ?: 'Not found'}"
+
+    // 6. First build or missing baseline
     if (!previousCommit) {
 
-        echo 'First build detected. Running complete CI pipeline.'
+        echo 'No previous successful commit baseline found. Running full CI.'
 
         env.RUN_CI = 'true'
         selectedServices = allServices
 
     } else {
 
-        // 6. Validate previous commit
+        // 7. Validate previous commit
         def commitExists = sh(
             script: "git cat-file -e '${previousCommit}^{commit}' 2>/dev/null",
             returnStatus: true
@@ -63,7 +73,7 @@ def call(String imageTagLength) {
             error("Previous successful commit is unavailable: ${previousCommit}")
         }
 
-        // 7. Detect changed files
+        // 8. Detect changed files
         def changedFilesOutput = sh(
             script: "git diff --name-only '${previousCommit}' '${currentCommit}'",
             returnStdout: true
@@ -75,42 +85,41 @@ def call(String imageTagLength) {
 
         echo "Changed files: ${changedFiles}"
 
-        // 8. Check whether anything changed inside src/
-        def sourceChanged = changedFiles.any {
+        // 9. Check source changes
+        def sourceFiles = changedFiles.findAll {
             it.startsWith('src/')
         }
 
-        if (sourceChanged) {
+        if (sourceFiles) {
 
             env.RUN_CI = 'true'
 
-            echo 'Changes detected inside src/. Running CI pipeline.'
-
-            // 9. Identify changed microservices
-            def changedServices = changedFiles
-                .findAll { it.startsWith('src/') }
+            def changedServices = sourceFiles
                 .collect { it.split('/')[1] }
                 .unique()
 
-            // 10. Select only changed microservices
             selectedServices = allServices.findAll {
                 changedServices.contains(it)
             }
 
+            echo "Changed microservices: ${changedServices}"
+
             if (selectedServices.isEmpty()) {
-                echo 'Source files changed, but no individual microservice Dockerfile directory was identified.'
+                echo 'Source changes detected, but no buildable microservice was identified.'
             }
 
         } else {
-
-            env.RUN_CI = 'false'
 
             echo 'No changes detected inside src/. Skipping CI pipeline.'
         }
     }
 
-    // 11. Export selected services
+    // 10. Export selected services
     env.SERVICES = selectedServices.join('\n')
+
+    // Save current commit as this build's baseline.
+    // It will be used only if this build becomes successful.
+    currentBuild.description = "CI_BASELINE_COMMIT=${currentCommit}"
 
     echo "RUN_CI: ${env.RUN_CI}"
     echo "Image tag: ${env.IMAGE_TAG}"
