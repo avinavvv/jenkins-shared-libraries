@@ -40,8 +40,13 @@ def call(String imageTagLength) {
     // 5. Read baseline commit from previous build description
     def previousDescription = previousBuild?.description ?: ''
 
-    def matcher = previousDescription =~ /CI_BASELINE_COMMIT=([0-9a-f]{40})/
-    def previousCommit = matcher.find() ? matcher.group(1) : null
+    def baselineLine = previousDescription.readLines().find {
+        it.startsWith('CI_BASELINE_COMMIT=')
+    }
+
+    def previousCommit = baselineLine
+        ? baselineLine.substring('CI_BASELINE_COMMIT='.length()).trim()
+        : null
 
     // Fallback for older builds
     if (!previousCommit) {
@@ -53,7 +58,7 @@ def call(String imageTagLength) {
     echo "Previous successful build: ${previousBuild?.number ?: 'None'}"
     echo "Previous successful commit: ${previousCommit ?: 'Not found'}"
 
-    // 6. First build or missing baseline
+    // 6. No baseline found
     if (!previousCommit) {
 
         echo 'No previous successful commit baseline found. Running full CI.'
@@ -83,9 +88,11 @@ def call(String imageTagLength) {
             ? changedFilesOutput.readLines()
             : []
 
+        echo "Previous successful commit: ${previousCommit}"
+        echo "Current commit: ${currentCommit}"
         echo "Changed files: ${changedFiles}"
 
-        // 9. Check source changes
+        // 9. Detect source changes
         def sourceFiles = changedFiles.findAll {
             it.startsWith('src/')
         }
@@ -117,8 +124,8 @@ def call(String imageTagLength) {
     // 10. Export selected services
     env.SERVICES = selectedServices.join('\n')
 
-    // Save current commit as this build's baseline.
-    // It will be used only if this build becomes successful.
+    // Save current commit in this build's description.
+    // This becomes the baseline only if the build succeeds.
     currentBuild.description = "CI_BASELINE_COMMIT=${currentCommit}"
 
     echo "RUN_CI: ${env.RUN_CI}"
